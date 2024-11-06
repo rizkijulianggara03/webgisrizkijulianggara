@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WEBGIS DIGITASI ITERA</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <!-- Leaflet.draw CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <!-- Leaflet.draw JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <!-- FontAwesome untuk ikon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    <!-- Custom CSS untuk desain -->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #5566ff;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-top: 20px;
+        }
+
+        #map {
+            width: 100%;
+            height: 500px;
+        }
+
+        /* Styling untuk tombol */
+        button, input[type="file"] {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 8px 13px;
+            cursor: pointer;
+            font-size: 7px;
+            margin: 10px 0;
+            transition: background-color 0.3s;
+        }
+
+        button:hover, input[type="file"]:hover {
+            background-color: #2980b9;
+        }
+
+        .controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .leaflet-popup-content {
+            color: #333;
+            font-size: 14px;
+        }
+
+        /* Styling untuk kontrol layer */
+        .leaflet-control-layers {
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 5px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+
+<h1>WebGIS Digitasi Peta ITERA</h1>
+
+<!-- Kontrol tombol untuk export dan import -->
+<div class="controls">
+    <button onclick="exportGeoJSON()">Export ke GeoJSON <i class="fas fa-download"></i></button>
+    <br>
+    <input type="file" id="importFile" accept=".geojson" onchange="importGeoJSON(event)" />
+</div>
+
+<div id="map"></div>
+
+<script>
+    // Inisialisasi peta dan set titik pusat serta zoom level
+    var map = L.map('map').setView([-5.367016, 105.317890], 15); // Lokasi: Titik Kajian Anda
+
+    // Layer dasar OpenStreetMap
+    var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    });
+
+    // Layer Google Satellite
+    var googleSatLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+        attribution: '&copy; <a href="https://www.google.com/maps">Google Maps</a>'
+    });
+
+    // Layer untuk menyimpan hasil digitasi
+    var drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    // Opsi layer dasar (menambahkan Google Satellite)
+    var baseMaps = {
+        "OpenStreetMap": osmLayer,
+        "Google Satellite": googleSatLayer
+    };
+
+    // Opsi layer overlay
+    var overlayMaps = {
+        "Layer Digitasi": drawnItems
+    };
+
+    // Menambahkan kontrol layer ke peta
+    L.control.layers(baseMaps, overlayMaps).addTo(map);
+
+    // Menambahkan kontrol digitasi menggunakan Leaflet.draw
+    var drawControl = new L.Control.Draw({
+        edit: {
+            featureGroup: drawnItems
+        },
+        draw: {
+            polyline: true, // Tidak mengaktifkan garis
+            polygon: true,   // Mengaktifkan poligon
+            rectangle: true, // Mengaktifkan persegi panjang
+            circle: true,   // Menonaktifkan lingkaran
+            marker: true    // Menonaktifkan marker
+        }
+    });
+    map.addControl(drawControl);
+
+    // Event saat bentuk selesai digambar
+    map.on('draw:created', function (e) {
+        var type = e.layerType;
+        var layer = e.layer;
+
+        // Tambahkan layer ke grup layer hasil digitasi
+        drawnItems.addLayer(layer);
+
+        // Meminta pengguna untuk memasukkan teks yang akan ditampilkan di pop-up
+        var popupContent = prompt("Masukkan Keterangan Digitasi:");
+        if (popupContent) {
+            layer.bindPopup(popupContent).openPopup();
+        }
+    });
+
+    // Fungsi untuk export hasil digitasi ke GeoJSON
+    function exportGeoJSON() {
+        var data = drawnItems.toGeoJSON();  // Mengonversi hasil digitasi menjadi GeoJSON
+        var blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = "Digitasi.geojson";  // Nama file yang akan diekspor
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    // Fungsi untuk import file GeoJSON
+    function importGeoJSON(event) {
+        var file = event.target.files[0];
+        if (file) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var geojsonData = JSON.parse(e.target.result);
+
+                // Tambahkan data GeoJSON ke layer
+                L.geoJSON(geojsonData, {
+                    onEachFeature: function (feature, layer) {
+                        if (feature.properties && feature.properties.popupContent) {
+                            layer.bindPopup(feature.properties.popupContent);
+                        }
+                    }
+                }).addTo(drawnItems);
+            };
+            reader.readAsText(file);
+        }
+    }
+</script>
+
+</body>
+</html>
